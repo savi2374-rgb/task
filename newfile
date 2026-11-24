@@ -1,0 +1,276 @@
+1 . We'll also run a stress-ng CPU test
+
+2 .Configure User Data (Docker)=
+ ans= #!/bin/bash
+set -eux
+
+dnf update -y
+dnf install -y docker
+systemctl enable docker
+systemctl start docker
+
+docker pull YOUR_TASK9_IMAGE
+
+docker run -d \
+  --name erp-web \
+  --restart always \
+  -p 80:8080 \
+  YOUR_TASK9_IMAGE
+
+3 .Create Auto Scaling Group=
+ERP-Web-ASG
+ERP-Web-LT
+
+4 .Choose network
+ap-south-1a
+ap-south-1b
+
+5 . How would you enable RDS Storage Auto Scaling
+ans.	I would enable Storage Auto Scaling in Amazon RDS by modifying the database instance and setting the maximum storage threshold. 
+	This allows RDS to automatically increase storage when free space becomes low.
+	It helps prevent storage exhaustion during high traffic.
+	
+	
+	
+6. How would you scale reads?
+ans.I would create two MySQL Read Replicas to distribute read traffic. 
+The primary database handles write operations, while Read Replicas handle read queries such as reports,
+ dashboards and result searches.
+ This reduces CPU load on the primary database.
+ 
+7 How does Laravel split read/write connections
+ans.Laravel supports read/write database connections in its config/database.php file.
+ I configure the primary database endpoint for write operations and Read Replica endpoints for read operations.
+ SELECT queries go to replicas, while INSERT, UPDATE and DELETE queries go to the primary database. 
+ I also enable the sticky option to avoid some read-after-write consistency issue
+ 
+ 
+ 8. What trigger metric and target value would you use?
+ ans= I would use average CPU utilization of Aurora Read Replicas as the scaling metric and set the target value to 40%.
+ This keeps sufficient CPU capacity available to handle sudden traffic increases during result days
+ 
+ 
+9. How would you set up access for a 4-person team?
+ans= I would create four IAM users and three IAM groups:
+ Developers, DevOps, and Auditors. I would add two developers to the Developers group, 
+ one DevOps engineer to the DevOps group, and one auditor to the Auditors group.
+ I would assign permissions according to their job responsibilities.
+ 
+10. How would you implement least-privilege permissions?
+ans= I would follow the principle of least privilege by granting each user only the permissions required for their job.
+ Developers would get EC2 read-only access and write access to a specific S3 bucket.
+ The DevOps engineer would get permissions to manage infrastructure,
+ and the auditor would get read-only access.
+ 
+ 
+11. What permissions would you give the auditor?
+ans= I would attach the AWS managed ReadOnlyAccess policy to the Auditors group.
+ This allows the auditor to view AWS resources and configurations across services without modifying or deleting resources.
+ 
+ 12. What is an IAM Role for EC2?
+ans= An IAM Role is an identity that provides temporary permissions to AWS services or applications.
+ I would create an IAM role for EC2 with read-only access to a specific S3 bucket and attach it to the EC2 instance. 
+ This allows the instance to access S3 without storing permanent access keys on the server.
+ 
+ 13. How does EC2 access S3 without access keys?
+ans= EC2 uses an attached IAM role to obtain temporary security credentials through the Instance Metadata Service.
+ AWS automatically rotates these credentials, 
+ so we don't need to store access keys on the EC2 server.
+ 
+ 14.How would you verify the IAM Role?
+ans = I would connect to the EC2 instance and run aws sts get-caller-identity to verify the assumed role identity. 
+Then I would run aws s3 ls to confirm that the instance can read the authorized S3 bucket. 
+I would also test unauthorized actions to verify that least-privilege permissions are enforced.
+
+
+15.How would you enable versioning on both S3 buckets?
+Ans=
+I would open the S3 bucket properties,
+ go to Bucket Versioning, 
+ and enable versioning on both the source and destination buckets.
+ Versioning keeps multiple versions of objects and helps recover files from accidental overwrites or deletions.
+ 
+ 16.What is Cross-Region Replication (CRR)?
+Ans=
+Cross-Region Replication is an S3 feature that automatically copies objects from one bucket to another bucket in a different AWS Region. 
+It helps with disaster recovery, data protection, and regional availabilit
+
+17.How would you replicate only the answer-sheets/ prefix?
+Ans=
+I would create an S3 replication rule and configure the prefix filter as answer-sheets/. 
+This ensures that only objects inside the answer-sheets folder are replicated to the destination bucket
+
+18.Set up automated daily EBS snapshots with Amazon Data Lifecycle Manager: keep 7
+daily and 4 weekly
+ans= Frequency: Every 1 day
+Start time: 03:00 UTC
+Retention type: Count
+Retain: 7 snapshots
+
+19.RDS: set automated backups to 7 days, and explain manual snapshots vs automated
+backups.
+Frequency: Every 1 week
+Day: Sunday
+Start time: 04:00 UTC
+Retention type: Count
+Retain: 4 snapshots
+
+20 . Target group with health check on /health : healthy threshold 2, interval 15 seconds
+ans= Open AWS Console → EC2 → Target Groups.
+Click Create target groups
+Configure:
+
+
+21 .HTTP to HTTPS redirect. Use an ACM certificate, or explain the steps if you have no
+domain.
+ans =
+Listener 1 — HTTP
+Port: 80
+
+Action: Redirect to HTTPS
+- Protocol: HTTPS
+- Port: 443
+- Status code: HTTP 301 (permanent redirect)
+
+
+22. Create a GitLab repo with branches main , develop and feature/* . Protect main so
+changes need a merge request.
+ans= i create git branches main 
+
+23. GitLab CI/CD Pipeline – AWS Credentials & Jenkins Integration
+ans= Store AWS credentials securely as masked and protected GitLab CI/CD variables.
+Create a .gitlab-ci.yml pipeline with lint, build, and test stages,
+ or configure a webhook to trigger Jenkins whenever code is pushed to the develop branch.
+ 
+24.Checkout from GitLab
+ans= GitLab CI automatically checks out the repository for every pipeline job.
+
+
+25. Build the Docker image from Task 9
+ans= Assume your application already has a Dockerfile from Task 9.
+ 
+26.Push Docker image to Amazon ECR
+ans =AWS Console → Amazon ECR → Private repositories → Create repository.
+
+27. Write a multi-stage Dockerfile for a sample Laravel app: Composer install stage,
+then a PHP-FPM + Nginx runtime
+ans= the Dockerfile haw tow main stage
+
+# =========================
+# Stage 1: Composer dependencies
+# =========================
+FROM composer:2 AS composer-build
+
+WORKDIR /app
+
+COPY composer.json composer.lock ./
+
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --prefer-dist \
+    --no-scripts \
+    --optimize-autoloader
+
+COPY . .
+
+# =========================
+# Stage 2: PHP-FPM runtime
+# =========================
+FROM php:8.3-fpm-alpine AS runtime
+
+RUN apk add --no-cache \
+    icu-libs \
+    libzip \
+    oniguruma \
+    mysql-client
+
+RUN apk add --no-cache --virtual .build-deps \
+    $PHPIZE_DEPS \
+    icu-dev \
+    libzip-dev \
+    oniguruma-dev \
+    && docker-php-ext-install \
+        pdo_mysql \
+        mbstring \
+        intl \
+        zip \
+        opcache \
+        bcmath \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del .build-deps
+
+WORKDIR /var/www/html
+
+COPY --from=composer-build /app /var/www/html
+
+RUN mkdir -p storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+# PHP-FPM runs as non-root
+USER www-data
+
+EXPOSE 9000
+
+CMD ["php-fpm", "-F"]
+ 
+ 
+28 . Write a docker-compose.yml with app, MySQL and Redis for local development
+ ans= create nginx/defaualt.config
+ server {
+    listen 8080;
+    server_name localhost;
+
+    root /var/www/html/public;
+    index index.php index.html;
+
+    client_max_body_size 20M;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+
+        fastcgi_pass app:9000;
+        fastcgi_index index.php;
+
+        include fastcgi_params;
+
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $document_root;
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+	
+	
+}
+ 
+29 . Draw the architecture. Example: RDS binlog to Debezium to Kafka (Amazon MSK) to
+the ClickHouse Kafka engine. Or use AWS DMS, or ClickPipes.
+
+AWS Database Migration Service (DMS) can capture changes from RDS and replicate them into supported destinations.
+ I would consider it if the organization wants an AWS-managed replication service and reduced connector operations.
+
+
+30 . How would you monitor replication lag, and what happens if the CDC consumer is
+down for 2 hours?
+ans= I would implement CDC from Amazon RDS MySQL to ClickHouse using Debezium and Amazon MSK.
+ In RDS, I would use a custom parameter group with binlog_format=ROW and binlog_row_image=FULL,
+ enable automated backups, and configure binlog retention for at least 72 hours, preferably 7 days depending on storage and workload.
+ Debezium would read the RDS binlog and publish INSERT, UPDATE and DELETE events to MSK. ClickHouse would consume these events through its Kafka Engine
+ and materialized views and insert them into a ReplacingMergeTree table.
+I would use the transaction ID as the stable sorting key,
+ a monotonically increasing CDC version column, and a delete marker to handle updates and deletes.
+ I would monitor Debezium connector health, source lag, MSK consumer lag, ClickHouse insert errors and data freshness	
+	
